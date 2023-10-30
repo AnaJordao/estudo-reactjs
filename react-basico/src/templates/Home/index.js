@@ -1,3 +1,5 @@
+import { useState, useEffect, useCallback } from 'react';
+
 import './styles.css';
 
 import { Posts } from '../../components/Posts';
@@ -21,7 +23,7 @@ export const Home = () => {
   }, [])
 
   useEffect(() => {
-    console.log(new Date().toLocaleDateString('pt-BR'))
+    // console.log(new Date().toLocaleDateString('pt-BR'))
     handleLoadPosts(0, postsPerPage)
   }, [handleLoadPosts, postsPerPage])
 
