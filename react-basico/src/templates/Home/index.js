@@ -1,5 +1,3 @@
-import { Component, useCallback, useEffect, useState } from 'react';
-
 import './styles.css';
 
 import { Posts } from '../../components/Posts';
