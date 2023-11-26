@@ -260,6 +260,7 @@ function AppUseRef() {
 
 // ---------------- useContext ------------------------
 
+// data.js
 const globalState = {
   title: 'o título do contexto',
   body: 'o corpo do contexto',
@@ -331,8 +332,8 @@ const reducer = (state, action) => {
 	}
 }
 
-function App() {
-// function AppUseReducer() {
+// function App() {
+function AppUseReducer() {
 	
 	const [state, dispatch] = useReducer(reducer, globalState)
 	const {title, body, counter} = state
@@ -347,6 +348,118 @@ function App() {
 			<button onClick={() => dispatch({ type: 'naoexiste' })}>Nao Existe</button>
 		</div>
 	);
+}
+
+// -------------------- useReducer + useContext ---------------
+
+// actions.js
+export const actions = {
+    CHANGE_TITLE: 'CHANGE_TITLE'
+}
+
+// data.js
+export const globalS = {
+  title: 'O título do estado global'
+}
+
+// reducer.js
+export const reducer2 = (state, action) => {
+    switch (action.type) {
+        case actions.CHANGE_TITLE:
+            console.log('Mudou')
+            return {...state, title: action.payload}
+    
+        default:
+            return {...state}
+    }
+}
+
+// AppContext.jsx
+export const Context = React.createContext()
+export const AppContext = ({ children }) => {
+    const [state2, dispatch2] = useReducer(reducer2, globalS)
+
+    // fazer funções para facilitar o uso do dispatch
+    const changeTitle = (payload) => {
+        dispatch2({ type: actions.CHANGE_TITLE, payload: payload })
+    }
+
+    return (
+        <Context.Provider value={{ state2, changeTitle }}>
+            {children}
+        </Context.Provider>
+    )
+}
+
+AppContext.propTypes = {
+    children: P.node,
+};
+
+// H2/index.jsx
+const H2 = () => {
+    const ctx = useContext(Context)
+    const refIn = useRef()
+
+    return (
+        <>
+            <h2 onClick={() => ctx.changeTitle(refIn.current.value)}>
+                {ctx.state2.title}
+            </h2>
+            <input type='text' ref={refIn}/>
+        </>
+    )
+}
+
+// function App() {
+function AppUseRedAncCtx() {
+
+	return (
+        <AppContext>
+            <div>
+                <H2 />
+            </div>
+        </AppContext>
+	);
+}
+
+// ---------------------- Criando um Hook ----------------
+
+const useMyHook = (cb, delay = 1000) => {
+    const savedCb = useRef()
+
+    useEffect(() => {
+        savedCb.current = cb
+    }, [cb])
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            savedCb.current()
+        }, delay)
+
+        return () => clearInterval(interval)
+    })
+}
+
+function App() {
+// function AppUseMyHook() {
+
+    const [cont, setCont] = useState(0)
+    const [delay, setDelay] = useState(1000)
+    const [incrementor, setIncrementor] = useState(100)
+    
+    useMyHook(() => setCont(c => c+1), delay)
+
+    return (
+        <div>
+            <h1>Contador: {cont}</h1>
+            <h1>Delay: {delay}</h1>
+
+            <button onClick={() => setDelay(d => d + incrementor)}>+{incrementor}</button>
+            <button onClick={() => setDelay(d => d - incrementor)}>-{incrementor}</button>
+
+            <input type='number' value={incrementor} onChange={(e) => setIncrementor(Number(e.target.value))}/>
+        </div>
+    );
 }
 
 export default App;
