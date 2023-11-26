@@ -1,7 +1,7 @@
 import logo from './logo.svg'
 import './App.css';
 import P from 'prop-types'
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 // ----------- useState -------------------------
 // function App() {
@@ -126,26 +126,26 @@ function AppUseCallback() {
 
 // --------------------- useMemo (substitui o React.memo) -------------------------------------
 
-const Post = ({ post }) => {
-    console.log('filho renderizou')
-    return (
-        <div key={post.id}>
-            <h1>{post.title}</h1>
-            <p>{post.body}</p>
-        </div>
-    )
-}
+// const Post = ({ post }) => {
+//     console.log('filho renderizou')
+//     return (
+//         <div key={post.id}>
+//             <h1>{post.title}</h1>
+//             <p>{post.body}</p>
+//         </div>
+//     )
+// }
 
-Post.propTypes = {
-    post: P.shape({
-      id: P.number,
-      title: P.string,
-      body: P.string,
-    }),
-};
+// Post.propTypes = {
+//     post: P.shape({
+//       id: P.number,
+//       title: P.string,
+//       body: P.string,
+//     }),
+// };
 
-function App() {
-// function AppUseMemo() {
+// function App() {
+function AppUseMemo() {
 
     const [posts, setPosts] = useState([])
     const [value, setValue] = useState('')
@@ -154,11 +154,9 @@ function App() {
 
     // componentDidMount
     useEffect(() => {
-        setTimeout(function () {
-            fetch('https://jsonplaceholder.typicode.com/posts')
-                .then((res) => res.json())
-                .then((res) => setPosts(res))
-        }, 5000)
+        fetch('https://jsonplaceholder.typicode.com/posts')
+            .then((res) => res.json())
+            .then((res) => setPosts(res))
     }, [])
 
     return (
@@ -183,6 +181,172 @@ function App() {
 
         </div>
     );
+}
+
+// ------------------ useRef ------------------------
+const Post = ({ post, handleClick }) => {
+    console.log('filho renderizou')
+    return (
+        <div key={post.id}>
+            <h1 onClick={() => handleClick(post.title)}>{post.title}</h1>
+            <p>{post.body}</p>
+        </div>
+    )
+}
+
+Post.propTypes = {
+    post: P.shape({
+      id: P.number,
+      title: P.string,
+      body: P.string,
+    }),
+    handleClick: P.func,
+};
+
+// function App() {
+function AppUseRef() {
+
+    const [posts, setPosts] = useState([])
+    const [value, setValue] = useState('')
+    const input = useRef(null)
+    const counter = useRef(0)
+
+    console.log('pai renderizou')
+
+    // componentDidMount
+    useEffect(() => {
+        fetch('https://jsonplaceholder.typicode.com/posts')
+            .then((res) => res.json())
+            .then((res) => setPosts(res))
+    }, [])
+
+    useEffect(() => {
+        input.current.focus()
+    }, [value])
+
+    useEffect(() => {
+        counter.current++
+    })
+
+    const handleClick = (value) => {
+        setValue(value)
+    }
+
+    return (
+        <div className="App">
+            <h1>Renderizou {counter.current}X</h1>
+            <input
+                ref={input}
+                type='search'
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+            />
+        
+            {useMemo(() => {
+                return (
+                    posts.length > 0 && 
+                    posts.map((post) => {
+                        return <Post key={post.id} post={post} handleClick={handleClick}/>
+                    })
+                )
+            }, [posts])}
+
+            {posts.length <= 0 && <p>Ainda não há posts</p>}
+
+        </div>
+    );
+}
+
+
+// ---------------- useContext ------------------------
+
+const globalState = {
+  title: 'o título do contexto',
+  body: 'o corpo do contexto',
+  counter: 0,
+}
+const GlobalContext = React.createContext()
+
+const Div = () => {
+	return (
+		<>
+			<H1 />
+			<Par />
+		</>
+	)
+}
+
+const H1 = () => {
+	const ctx = useContext(GlobalContext)
+	const {
+		context: { title, counter },
+	} = ctx
+
+	return (
+		<h1>{title} {counter}</h1>
+	)
+}
+
+const Par = () => {
+	const ctx = useContext(GlobalContext)
+	const {
+		context: { body, counter },
+		context,
+		setContext,
+	} = ctx
+
+	return (
+		<p onClick={() => setContext({...context, counter: counter+1})}>{body}</p>
+	)
+}
+
+// function App() {
+function AppUseContext() {
+    
+	const [context, setContext] = useState(globalState)
+
+    return (
+		<GlobalContext.Provider value={{ context, setContext }}>
+			<Div />
+		</GlobalContext.Provider>
+    );
+}
+
+
+// --------------------- useReducer -----------------------
+
+const reducer = (state, action) => {
+	switch (action.type) {
+		case 'muda': {
+			console.log(action.payload)
+			return {...state, title: action.payload}
+		}
+		case 'inv': {
+			console.log('Inverteu')
+			return {...state, title: state.title.split('').reverse().join('')}
+		}
+		default:
+			console.log('NENHUMA AÇÃO ENCONTRADA')
+			return {...state}
+	}
+}
+
+function App() {
+// function AppUseReducer() {
+	
+	const [state, dispatch] = useReducer(reducer, globalState)
+	const {title, body, counter} = state
+
+	return (
+		<div>
+			<h1>{title}  {counter}</h1>
+			<p>{body}</p>
+
+			<button onClick={() => dispatch({ type: 'muda', payload: new Date().toLocaleString('pt-BR') })}>Mudar</button>
+			<button onClick={() => dispatch({ type: 'inv' })}>Inverter</button>
+			<button onClick={() => dispatch({ type: 'naoexiste' })}>Nao Existe</button>
+		</div>
+	);
 }
 
 export default App;
