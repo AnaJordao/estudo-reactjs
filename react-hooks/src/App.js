@@ -1,7 +1,8 @@
 import logo from './logo.svg'
 import './App.css';
 import P from 'prop-types'
-import React, { useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { Children, Component, Suspense, cloneElement, useCallback, useContext, useDebugValue, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+// import { LazyComponent } from './LazyComponent';
 
 // ----------- useState -------------------------
 // function App() {
@@ -422,7 +423,7 @@ function AppUseRedAncCtx() {
 	);
 }
 
-// ---------------------- Criando um Hook ----------------
+// ---------------------- Criando um Hook (useMyHook) ----------------
 
 const useMyHook = (cb, delay = 1000) => {
     const savedCb = useRef()
@@ -440,8 +441,8 @@ const useMyHook = (cb, delay = 1000) => {
     })
 }
 
-function App() {
-// function AppUseMyHook() {
+// function App() {
+function AppUseMyHook() {
 
     const [cont, setCont] = useState(0)
     const [delay, setDelay] = useState(1000)
@@ -460,6 +461,610 @@ function App() {
             <input type='number' value={incrementor} onChange={(e) => setIncrementor(Number(e.target.value))}/>
         </div>
     );
+}
+
+
+// ---------------- useFetch (my second custom hook) ------
+
+const isObjectEqual = (objA, objB) => {
+    return JSON.stringify(objA) === JSON.stringify(objB)
+} 
+
+const useFetch = (url, options) => {
+    const [result, setResult] = useState(null)
+    const [loading, setLoading]  = useState(false)
+    const [shouldLoad, setShouldLoad]  = useState(false)
+    const urlRef = useRef(url)
+    const optionsRef = useRef(options)
+
+    useEffect(() => {
+        let changed = false
+
+        if(!isObjectEqual(url, urlRef.current)) {
+            urlRef.current = url
+            changed = true
+        }
+
+        if(!isObjectEqual(options, optionsRef.current)) {
+            optionsRef.current = options
+            changed = true
+        }
+
+        if (changed) {
+            setShouldLoad(s => !s)
+        }
+
+    }, [url, options])
+
+    useEffect(() => {
+        let wait = false
+        const controller = new AbortController()
+        const signal = controller.signal
+        // console.log('EFFECT', new Date().toLocaleString())
+        // console.log(optionsRef.current.headers)
+
+        setLoading(true)
+
+        const fetchData = async () => {
+            await new Promise((r) => setTimeout(r, 1000))
+
+            try {
+                const res = await fetch(urlRef.current, {signal, ...optionsRef.current})
+                const jsonRes = await res.json()
+
+                if(!wait) {
+                    setResult(jsonRes)
+                    setLoading(false)
+                }
+            } catch(e) {
+                if (!wait) {
+                    setLoading(false)
+                }
+                console.log('MY ERROR:', e.message)
+            }
+            
+        }
+
+        fetchData()
+
+        return () => {
+            wait = true
+        }
+
+    }, [shouldLoad])
+
+    return [result, loading]
+}
+
+// function App() {
+function AppUseFetch() {
+
+const [postId, setPostId] = useState('')
+const [result, loading] = useFetch('https://jsonplaceholder.typicode.com/posts/' + postId, {
+    headers: {
+        abc: '1' + postId,
+    },
+})
+
+// useEffect(() => {
+//     console.log('ID do post', postId)
+// }, [postId])
+
+if (loading) {
+    return <p>Loading...</p>
+}
+
+
+const handleClickAppFetch = (id) => {
+    setPostId(id)
+}
+
+if(!loading && result) {
+
+    return (
+        <div>
+            {result?.length > 0 ? (
+                result.map((p) => (
+                    <div key={`post-${p.id}`} onClick={() => handleClickAppFetch(p.id)}>
+                        <p>{p.title}</p>
+                    </div>
+                ))
+            ) : (
+                <div onClick={() => handleClickAppFetch('')}>
+                    <p>{result.title}</p>
+                </div>
+            )}
+        </div>
+    );
+}
+return <h1>Oi</h1>
+}
+
+
+// ----------------- useAsync (terceiro hook customizado) ---------
+
+const useAsync = (asyncFunc, shouldRun) => {
+    const [state, setState] = useState({
+        status: 'idle',
+        result: null,
+        error: null,
+    })
+
+    const run = useCallback(() => {
+        setState({
+            status: 'pending',
+            result: null,
+            error: null,
+        })
+
+        return asyncFunc()
+            .then((res) => {
+                setState({
+                    status: 'settled',
+                    result: res,
+                    error: null,
+                })
+            })
+            .catch((e) => {
+                setState({
+                    status: 'error',
+                    result: null,
+                    error: e,
+                })
+            })
+    }, [asyncFunc])
+
+    useEffect(() => {
+        if(shouldRun){
+            run()
+        }
+    }, [run, shouldRun])
+
+    return [run, state]
+}
+
+const fetchData = async () => {
+    const data = await fetch('https://jsonplaceholder.typicode.com/posts/')
+    const json = await data.json()
+    return json
+}
+
+
+// function App() {
+function AppUseAsync() {
+
+    const [posts, setPosts] = useState(null)
+    const [reFetchData, stateReFetch] = useAsync(fetchData, true)
+    const [reFetchData2, stateReFetch2] = useAsync(fetchData, true)
+
+    useEffect(() => {
+        setTimeout(() => {
+            reFetchData();
+        }, 6000)
+    }, [reFetchData])
+
+    useEffect(() => {
+        console.log(stateReFetch2.result);
+    }, [stateReFetch2.result]);
+    
+    const handleClickAsync = () => {
+        reFetchData()
+    }
+
+    if(stateReFetch.status === 'idle'){
+        return <pre>idle: Nada executando</pre>
+    }
+    if(stateReFetch.status === 'pending'){
+        return <pre>pending: Loading...</pre>
+    }
+    if(stateReFetch.status === 'settled'){
+        return <pre onClick={handleClickAsync}>settled: {JSON.stringify(stateReFetch.result, null, 2)}</pre>
+    }
+    if(stateReFetch.status === 'error'){
+        return <pre>error: {JSON.stringify(stateReFetch.error, null, 2)}</pre>
+    }
+
+    return 'IXII'
+}
+
+// ------------ useLayoutEffect ----------------------
+// function App() {
+function AppUseLayoutEffect() {
+
+    const [counted, setCounted] = useState([0, 1, 2, 3, 4])
+    const divRef = useRef()
+
+    // useEffect(() => {
+    //     const now = Date.now()
+
+    //     while (Date.now() < now + 3000)
+    //     divRef.current.scrollTop = divRef.current.scrollHeight
+    // })
+
+    useLayoutEffect(() => {
+        const now = Date.now()
+
+        while (Date.now() < now + 3000)
+        divRef.current.scrollTop = divRef.current.scrollHeight
+    })
+
+    const toCount = () => {
+        setCounted((c) => [...c, +c.slice(-1) + 1])
+    }
+
+    return (
+        <>
+            <button onClick={toCount}>Count {counted.slice(-1)}</button>
+            <div ref={divRef} style={{ height: '100px', width: '100px', overflowY: 'scroll' }}>{counted.map((c) => {
+                return <p key={`c-${c}`}>{c}</p>
+            })}</div>
+        </>
+    )
+}
+
+// -------- useImperativeHandle + React.forwardRef ---------------------
+
+// function App() {
+function AppUseImp() {
+
+    const [counted, setCounted] = useState([0, 1, 2, 3, 4])
+    const divRef = useRef()
+
+    useLayoutEffect(() => {
+        const now = Date.now()
+
+        while (Date.now() < now + 300)
+        divRef.current.divRef.scrollTop = divRef.current.divRef.scrollHeight
+    })
+
+    const toCount = () => {
+        setCounted((c) => [...c, +c.slice(-1) + 1])
+    }
+
+    return (
+        <>
+            <button onClick={toCount}>Count {counted.slice(-1)}</button>
+            <DisplayCounted counted={counted} ref={divRef}/>
+        </>
+    )
+}
+
+export const DisplayCounted = React.forwardRef(function DisplayCounted({ counted }, ref) {
+    const [rand, setRand] = useState('0.24')
+    const divRef = useRef()
+
+    const handleClickImp = () => {
+        setRand(Math.random().toFixed(2))
+    }
+
+    useImperativeHandle(ref, () => ({
+        handleClickImp,
+        divRef: divRef.current,
+    }))
+
+    return (
+        <div ref={divRef} style={{ height: '100px', width: '100px', overflowY: 'scroll' }}>{counted.map((c) => {
+                return <p onClick={handleClickImp} key={`c-${c}`}>{c} +++ {rand}</p>
+        })}</div>
+    )
+})
+
+// ---------------------- useDebugValue + useMediaQuery (custom) ----------------------------
+
+const useMediaQuery = (query, initialValue = false) => {
+    const [match, setMatch] = useState(initialValue)
+
+    useDebugValue(`Query: ${query}`, (name) => {
+        return name + ' modificado'
+    })
+
+    useEffect(() => {
+        let isMounted = true
+        const matchMedia = window.matchMedia(query)
+
+        const handleChange = () => {
+            if(!isMounted) return
+            setMatch(Boolean(matchMedia.matches))
+        }
+
+        matchMedia.addEventListener('change', handleChange)
+        setMatch(!!matchMedia.matches)
+
+        return () => {
+            isMounted = false
+            matchMedia.removeEventListener('change', handleChange)
+        }
+    }, [query])
+
+    return match
+}
+
+// function App() {
+function AppUseDebugValue() {
+   
+    const huge = useMediaQuery('(min-width: 980px)')
+    const big = useMediaQuery('(max-width: 980px) and (min-width: 768px)')
+    const medium = useMediaQuery('(max-width: 767px) and (min-width: 321px)')
+    const small = useMediaQuery('(max-width: 321px)')
+
+    const background = huge ? 'green' : big ? 'red' : medium ? 'yellow' : small ? 'purple' : null
+
+    return (
+        <div style={{background}}>OI</div>
+    )
+}
+
+// --------------------------------- Ordem dos Hooks ---------------------------------------------
+
+export const ReactHooks = () => {
+    console.log('%cCHILD RENDER STARTING...', 'color: green');
+  
+    // Lazy Initializer #1
+    const [state1, setState1] = useState(() => {
+      const state = new Date().toLocaleDateString()
+      console.log('%cState Lazy initializer - (useState + InitialValue) = ' + state, 'color: green')
+      return state
+    })
+    const renders = useRef(0)
+  
+    useEffect(() => {
+      console.log('%cuseEffect (UPDATE state1) ' + state1, 'color: #dbc70f')
+    }, [state1])
+  
+    useEffect(() => {
+      console.log('%cuseEffect -> No Dependencies', 'color: #dbc70f')
+      renders.current += 1
+  
+      return () => {
+        console.log('%cuseEffect (Cleanup) -> No Dependencies', 'color: #dbc70f')
+      }
+    })
+  
+    useEffect(() => {
+      const listener = () => console.log('Listener...')
+      console.log('%cuseEffect -> Empty dependencies', 'color: #dbc70f')
+  
+      return () => {
+        console.log('%cuseEffect (Cleanup) -> Empty dependencies', 'color: #dbc70f')
+      }
+    }, [])
+  
+    useLayoutEffect(() => {
+      console.log('%cuseLayoutEffect', 'color: #e61a4d')
+  
+      return () => {
+        console.log('%cuseLayoutEffect (Cleanup)', 'color: #e61a4d')
+      }
+    })
+  
+    console.log('%cCHILD RENDER ' + renders.current + ' ENDING...', 'color: green')
+    return (
+      <div onClick={() => setState1(new Date().toLocaleString('pt-br'))} style={{ fontSize: '60px' }}>
+        State: {state1}
+      </div>
+    );
+  };
+
+// const App = () => {
+const AppOrdemHooks = () => {
+    const renders = useRef(0)
+
+    useEffect(() => {
+        renders.current += 1
+    });
+
+    console.log(`%cPARENT RENDER ${renders.current} STARTING...`, 'color: green')
+    const [show, setShow] = useState(false);
+    console.log('%cState Initializer - (useState + InitialValue) = ' + show, 'color: green')
+    console.log(`%cPARENT RENDER ${renders.current} ENDING...`, 'color: green')
+
+    return (
+        <div>
+        <p style={{ fontSize: '60px' }} onClick={() => setShow((s) => !s)}>
+            Show hooks
+        </p>
+        {show && <ReactHooks />}
+        </div>
+    );
+};
+
+// ---------------- errorBoundary ----------------------
+
+const s = {
+    style: {
+        fontSize: '20px',
+    }
+}
+
+class MyErrorBoundary extends Component {
+    constructor(props) {
+        super(props)
+        this.state = {hasError: false}
+    }
+
+    static getDerivedStateFromError(error) {
+        // Atualiza o state para que a próxima renderização mostre a UI alternativa.
+        return { hasError: true };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        // Você também pode registrar o erro em um serviço de relatórios de erro
+        // console.log(error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            // Você pode renderizar qualquer UI alternativa
+            return <p {...s}>Deu ruim =(</p>;
+        }
+
+        return this.props.children;
+    }
+}
+
+// componente que gerará um erro
+const ItWillThrowError = () => {
+
+    const [counter, setCounter] = useState(0)
+
+    useEffect(() => {
+        if(counter > 3){
+            throw new Error('Que chato :(')
+        }
+    }, [counter])
+
+    return (
+        <button {...s} onClick={() => setCounter(c => c+1)}>Increase {counter}</button>
+    )
+}
+
+// const App = () => {
+function AppErrorBoundary() {
+
+    return (
+        <div {...s}>
+            <MyErrorBoundary>
+                <ItWillThrowError/>
+            </MyErrorBoundary>
+            <MyErrorBoundary>
+                <ItWillThrowError/>
+            </MyErrorBoundary>
+            <MyErrorBoundary>
+                <ItWillThrowError/>
+            </MyErrorBoundary>
+            <MyErrorBoundary>
+                <ItWillThrowError/>
+            </MyErrorBoundary>
+            <MyErrorBoundary>
+                <ItWillThrowError/>
+            </MyErrorBoundary>
+            <MyErrorBoundary>
+                <ItWillThrowError/>
+            </MyErrorBoundary>
+            <MyErrorBoundary>
+                <ItWillThrowError/>
+            </MyErrorBoundary>
+        </div>
+    )
+}
+
+// ----------- compound Components ---------------------
+
+// const TurnOnOff = ({ children }) => {
+//     const [isOn, setIsOn] = useState(false)
+//     const onTurn = () => setIsOn(s => !s)
+
+//     return React.Children.map(children, (child) => {
+//         const newChild = cloneElement(child, {
+//             isOn,
+//             onTurn,
+//         })
+//         return newChild
+//     })
+// }
+
+// const TurnOn = ({ isOn, children }) => (isOn ? children : null)
+// const TurnOff = ({ isOn, children }) => (isOn ? null : children)
+// const TurnBttn = ({ isOn, onTurn, ...props }) => {
+//     return (
+//         <button onClick={onTurn} {...props}>
+//             Turn {isOn ? 'OFF' : 'ON'}
+//         </button>
+//     )
+// }
+const Parag = ({ children }) => <p {...s}>{children}</p>
+
+// const App = () => {
+function AppCompoundComponents() {
+
+    return (
+        <TurnOnOff>
+            <TurnOn>
+                <Parag>Aqui as coisas que vão acontecer quando estiver ON</Parag>
+            </TurnOn>
+            <TurnOff>
+                <Parag>Aqui vem as coisas do OFF</Parag>
+            </TurnOff>
+            <TurnBttn {...s} />
+        </TurnOnOff>
+    )
+}
+
+// ----------------- Compoud Components using default html components ------------
+
+const TurnOnOffContext = React.createContext()
+
+const TurnOnOff = ({ children }) => {
+    const [isOn, setIsOn] = useState(false)
+    const onTurn = () => setIsOn(s => !s)
+
+    return <TurnOnOffContext.Provider value={{isOn, onTurn}}>{children}</TurnOnOffContext.Provider>
+}
+
+const TurnOn = ({ children }) => {
+    const { isOn } = useContext(TurnOnOffContext)
+    return (isOn ? children : null)
+}
+const TurnOff = ({ children }) => {
+    const { isOn } = useContext(TurnOnOffContext)
+    return (isOn ? null : children)
+}
+const TurnBttn = ({ ...props }) => {
+    const { isOn, onTurn } = useContext(TurnOnOffContext)
+    return (
+        <button onClick={onTurn} {...props}>
+            Turn {isOn ? 'OFF' : 'ON'}
+        </button>
+    )
+}
+
+// const App = () => {
+function AppCompoundComponents2() {
+
+    return (
+        <TurnOnOff>
+            <div>
+                <header>
+                    <TurnOff>
+                        <Parag>Aqui vem as coisas do OFF</Parag>
+                    </TurnOff>
+                </header>
+                <section>
+                    <TurnOn>
+                        <Parag>Aqui as coisas que vão acontecer quando estiver ON</Parag>
+                    </TurnOn>
+                </section>
+            </div>
+            <TurnBttn {...s} />
+        </TurnOnOff>
+    )
+}
+
+// -------------- React.lazy + Suspence -----------------
+
+const loadComponent = () => {
+    console.log('Componente carregando...')
+    return import('./LazyComponent')
+}
+const LazyComponent = React.lazy(loadComponent)
+
+const App = () => {
+// function AppCompoundComponents() {
+
+    const [show, setShow] = useState(false)
+
+    return (
+        <div>
+            <p>
+                <button onMouseOver={loadComponent} onClick={() => setShow((s) => !s)}>
+                    Show {show ? 'LC on screen' : 'LC off screen'}
+                </button>
+            </p>
+            <Suspense fallback={<p>Carregando...</p>}>
+                {show && <LazyComponent />}
+            </Suspense>
+        </div>
+    )
 }
 
 export default App;
